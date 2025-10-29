@@ -95,9 +95,31 @@
 
         <footer class="fixed bottom-0 left-0 right-0 bg-neutral/80 backdrop-blur-sm shadow-t-xl z-40">
           <div class="container mx-auto px-4 py-3">
-            <div class="flex justify-center items-center mb-3">
-              <label for="global-score-step" class="mr-3 font-semibold text-lg text-white">Step:</label>
-              <input id="global-score-step" type="number" value="1" min="1" class="w-24 h-10 text-center bg-base-100 border-2 border-gray-600 rounded-md text-white text-lg focus:outline-none focus:ring-2 focus:ring-accent">
+            <div class="flex justify-center items-center gap-2 mb-3">
+                <button data-action="set-mode" data-mode="input" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Input</button>
+                <button data-action="set-mode" data-mode="preset" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-accent text-white">Preset</button>
+            </div>
+            <div id="score-controls-container" class="mb-3">
+                <div id="input-mode-controls" class="hidden flex justify-center items-center">
+                    <label for="global-score-step" class="mr-3 font-semibold text-lg text-white">Step:</label>
+                    <input id="global-score-step" type="number" value="1" min="1" class="w-24 h-10 text-center bg-base-100 border-2 border-gray-600 rounded-md text-white text-lg focus:outline-none focus:ring-2 focus:ring-accent">
+                </div>
+                <div id="preset-mode-controls" class="">
+                    <div class="flex justify-center items-center gap-x-4">
+                        <label class="flex items-center space-x-2 text-white font-semibold">
+                            <input type="radio" name="preset-score" value="5" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                            <span>5</span>
+                        </label>
+                        <label class="flex items-center space-x-2 text-white font-semibold">
+                            <input type="radio" name="preset-score" value="10" checked class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                            <span>10</span>
+                        </label>
+                        <label class="flex items-center space-x-2 text-white font-semibold">
+                            <input type="radio" name="preset-score" value="20" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                            <span>20</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="flex justify-around items-center">
                 <button data-action="save" aria-label="Save" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
@@ -160,6 +182,7 @@
             let players = [];
             let isResetConfirming = false;
             let resetTimeout = null;
+            let currentMode = 'preset'; // 'input' or 'preset'
 
             // DOM Elements
             const playerContainer = document.getElementById('player-container');
@@ -170,7 +193,13 @@
             const notificationContainer = document.getElementById('notification-container');
             const resetButton = document.getElementById('reset-button');
             const resetLabel = document.getElementById('reset-label');
+            
+            // Mode-specific DOM elements
+            const modeButtons = document.querySelectorAll('.mode-button');
+            const inputModeControls = document.getElementById('input-mode-controls');
+            const presetModeControls = document.getElementById('preset-mode-controls');
             const globalScoreStepInput = document.getElementById('global-score-step');
+
 
             // --- SERVICES ---
 
@@ -309,6 +338,27 @@
                 }
             };
             
+            const setMode = (newMode) => {
+                currentMode = newMode;
+                if (currentMode === 'input') {
+                    inputModeControls.classList.remove('hidden');
+                    presetModeControls.classList.add('hidden');
+                } else {
+                    inputModeControls.classList.add('hidden');
+                    presetModeControls.classList.remove('hidden');
+                }
+
+                modeButtons.forEach(button => {
+                    if (button.dataset.mode === currentMode) {
+                        button.classList.remove('bg-primary');
+                        button.classList.add('bg-accent');
+                    } else {
+                        button.classList.remove('bg-accent');
+                        button.classList.add('bg-primary');
+                    }
+                });
+            };
+
             // --- EVENT HANDLERS ---
             
             const handleAddPlayer = (name) => {
@@ -339,9 +389,15 @@
                 const player = players.find(p => p.id === id);
                 if (!player) return;
                 
-                let amount = parseInt(globalScoreStepInput.value, 10);
-                if (isNaN(amount) || amount <= 0) {
-                    amount = 1; // Default to 1 if input is invalid
+                let amount;
+                if (currentMode === 'input') {
+                    amount = parseInt(globalScoreStepInput.value, 10);
+                    if (isNaN(amount) || amount <= 0) {
+                        amount = 1; // Default to 1 if input is invalid
+                    }
+                } else { // preset mode
+                    const selectedPreset = document.querySelector('input[name="preset-score"]:checked');
+                    amount = selectedPreset ? parseInt(selectedPreset.value, 10) : 10;
                 }
 
                 const finalAmount = amount * sign;
@@ -446,6 +502,9 @@
                     case 'update-score':
                         handleUpdateScore(id, sign);
                         break;
+                    case 'set-mode':
+                        setMode(targetButton.dataset.mode);
+                        break;
                 }
             });
             
@@ -461,6 +520,7 @@
             });
             
             // Initial Load
+            setMode('preset'); // Set default mode on load
             players = loadPlayersFromStorage();
             if (players.length > 0) {
                 showNotification('Game loaded from last session!', 'success');
