@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game Score Tracker</title>
+    <meta name="description" content="A modern, responsive web application to track player scores during a game.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <script>
@@ -13,11 +12,11 @@
         theme: {
           extend: {
             colors: {
-              'primary': '#1e3a8a', // A deep blue
-              'secondary': '#4f46e5', // Indigo
-              'accent': '#10b981', // Emerald green
-              'neutral': '#1f2937', // Dark gray
-              'base-100': '#111827', // Even darker gray for background
+              'primary': '#1e3a8a',
+              'secondary': '#4f46e5',
+              'accent': '#10b981',
+              'neutral': '#1f2937',
+              'base-100': '#111827',
               'info': '#3b82f6',
               'success': '#22c55e',
               'warning': '#f97316',
@@ -27,17 +26,447 @@
         },
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/"
-  }
-}
-</script>
+    <style>
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* New Score Flash Animation */
+        @keyframes score-flash-up {
+            50% { background-color: rgba(34, 197, 94, 0.3); }
+        }
+        @keyframes score-flash-down {
+            50% { background-color: rgba(239, 68, 68, 0.3); }
+        }
+        .animate-score-up {
+            animation: score-flash-up 0.8s ease-out;
+        }
+        .animate-score-down {
+            animation: score-flash-down 0.8s ease-out;
+        }
+
+        /* Modal Animation */
+        @keyframes scale-in {
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-scale-in {
+            animation: scale-in 0.2s forwards;
+        }
+        .hidden {
+            display: none;
+        }
+        /* Hide number input spinners */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        input[type=number] {
+          -moz-appearance: textfield;
+        }
+    </style>
 </head>
-  <body class="bg-base-100 text-gray-200 antialiased">
-    <div id="root"></div>
-  </body>
+<body class="bg-base-100 text-gray-200 font-sans">
+
+    <div id="notification-container" class="fixed top-5 right-5 z-[60]"></div>
+
+    <div class="min-h-screen flex flex-col">
+        <header class="bg-neutral shadow-lg">
+          <div class="container mx-auto px-4 py-4">
+            <h1 class="text-2xl sm:text-3xl font-bold text-center text-white tracking-wider">
+              <i class="fas fa-gamepad mr-3 text-accent"></i>
+              Game Score Tracker
+            </h1>
+          </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 py-8 pb-48">
+            <div id="no-players-message" class="text-center mt-20 hidden">
+                <p class="text-gray-400 text-2xl">No players yet.</p>
+                <p class="text-gray-500 mt-2">Click "Add Player" to start the game!</p>
+            </div>
+            <div id="player-container" class="flex flex-col gap-3">
+                <!-- Player rows will be injected here -->
+            </div>
+        </main>
+
+        <footer class="fixed bottom-0 left-0 right-0 bg-neutral/80 backdrop-blur-sm shadow-t-xl z-40">
+          <div class="container mx-auto px-4 py-3">
+            <div class="flex justify-center items-center mb-3">
+              <label for="global-score-step" class="mr-3 font-semibold text-lg text-white">Step:</label>
+              <input id="global-score-step" type="number" value="1" min="1" class="w-24 h-10 text-center bg-base-100 border-2 border-gray-600 rounded-md text-white text-lg focus:outline-none focus:ring-2 focus:ring-accent">
+            </div>
+            <div class="flex justify-around items-center">
+                <button data-action="save" aria-label="Save" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                    <i class="fas fa-save text-lg sm:text-xl pointer-events-none"></i>
+                    <span class="pointer-events-none">Save</span>
+                </button>
+                <button data-action="load" aria-label="Load" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                    <i class="fas fa-upload text-lg sm:text-xl pointer-events-none"></i>
+                    <span class="pointer-events-none">Load</span>
+                </button>
+                <button data-action="open-modal" aria-label="Add Player" class="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent hover:bg-emerald-500 text-white shadow-lg transform transition hover:scale-110 -translate-y-4">
+                  <i class="fas fa-plus text-2xl pointer-events-none"></i>
+                </button>
+                <button data-action="export" aria-label="Export" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                    <i class="fas fa-file-csv text-lg sm:text-xl pointer-events-none"></i>
+                    <span class="pointer-events-none">Export</span>
+                </button>
+                <button id="reset-button" data-action="reset" aria-label="Reset" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-warning hover:bg-orange-500">
+                    <i id="reset-icon" class="fas fa-sync-alt text-lg sm:text-xl pointer-events-none"></i>
+                    <span id="reset-label" class="pointer-events-none">Reset</span>
+                </button>
+            </div>
+          </div>
+        </footer>
+
+        <div id="add-player-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
+          <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
+            <h2 class="text-2xl font-bold mb-4 text-white">Add New Player</h2>
+            <form id="add-player-form">
+              <input
+                id="player-name-input"
+                type="text"
+                placeholder="Enter player's name"
+                class="w-full px-4 py-2 bg-base-100 border-2 border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-white"
+                required
+              />
+              <div class="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  data-action="close-modal"
+                  class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="px-4 py-2 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold"
+                >
+                  Add Player
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const STORAGE_KEY = 'gameScoreTrackerData';
+            let players = [];
+            let isResetConfirming = false;
+            let resetTimeout = null;
+
+            // DOM Elements
+            const playerContainer = document.getElementById('player-container');
+            const noPlayersMessage = document.getElementById('no-players-message');
+            const modal = document.getElementById('add-player-modal');
+            const addPlayerForm = document.getElementById('add-player-form');
+            const playerNameInput = document.getElementById('player-name-input');
+            const notificationContainer = document.getElementById('notification-container');
+            const resetButton = document.getElementById('reset-button');
+            const resetLabel = document.getElementById('reset-label');
+            const globalScoreStepInput = document.getElementById('global-score-step');
+
+            // --- SERVICES ---
+
+            const savePlayersToStorage = () => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+                } catch (error) {
+                    console.error('Failed to save players:', error);
+                }
+            };
+
+            const loadPlayersFromStorage = () => {
+                try {
+                    const data = localStorage.getItem(STORAGE_KEY);
+                    if (!data) return [];
+                    const loadedPlayers = JSON.parse(data);
+                    // Ensure backward compatibility
+                    return loadedPlayers.map(p => ({
+                        ...p,
+                        previousScore: p.previousScore !== undefined ? p.previousScore : null
+                    }));
+                } catch (error) {
+                    console.error('Failed to load players:', error);
+                    return [];
+                }
+            };
+            
+            const exportToCsv = () => {
+                if (players.length === 0) {
+                    showNotification('Add some players first!', 'error');
+                    return;
+                }
+                const headers = ['Name', 'Score'];
+                const rows = players.map(p => [p.name, p.score]);
+                let csvContent = headers.join(',') + '\r\n';
+                rows.forEach(row => { csvContent += row.join(',') + '\r\n'; });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'game-scores.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showNotification('Scores exported to CSV!', 'success');
+            };
+
+            // --- UI & RENDERING ---
+
+            const showNotification = (message, type) => {
+                const notification = document.createElement('div');
+                const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
+                notification.className = `px-6 py-3 rounded-lg shadow-lg text-white font-semibold transition-all duration-300 mb-2 opacity-0 translate-x-10 ${type === 'success' ? 'bg-accent' : 'bg-error'}`;
+                notification.innerHTML = `<i class="fas ${iconClass} mr-3"></i> ${message}`;
+                
+                notificationContainer.appendChild(notification);
+                
+                requestAnimationFrame(() => {
+                    notification.style.opacity = '1';
+                    notification.style.transform = 'translateX(0)';
+                });
+
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(10px)';
+                    notification.addEventListener('transitionend', () => notification.remove());
+                }, 2700);
+            };
+
+            const getPlayerRowHTML = (player, rank) => {
+                const crowns = {
+                    first: `<i class="fas fa-crown text-yellow-400 absolute -top-1 -left-1 text-lg transform -rotate-12" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5)"></i>`,
+                    second: `<i class="fas fa-crown text-slate-400 absolute -top-1 -left-1 text-lg transform -rotate-12" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5)"></i>`
+                };
+
+                const previousScoreHTML = player.previousScore !== null
+                    ? `<span class="text-xs text-gray-500 score-history-display">was ${player.previousScore}</span>`
+                    : `<span class="text-xs text-gray-500 score-history-display"></span>`;
+
+                return `
+                    <div class="bg-neutral rounded-lg shadow-lg flex items-center p-3 gap-3" data-player-id="${player.id}">
+                        <div class="relative flex-shrink-0">
+                            <img src="${player.avatarUrl}" alt="${player.name}'s avatar" class="w-12 h-12 rounded-full border-2 border-accent" />
+                            ${rank ? crowns[rank] : ''}
+                        </div>
+                        <div class="flex-grow overflow-hidden">
+                            <h2 class="text-lg font-bold text-white truncate">${player.name}</h2>
+                            ${previousScoreHTML}
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <p class="text-2xl font-extrabold text-white tracking-tighter w-16 text-center score-display rounded-md">${player.score}</p>
+                            
+                            <div class="flex items-center gap-2">
+                                <button data-action="update-score" data-id="${player.id}" data-sign="-1" class="w-8 h-8 flex items-center justify-center text-lg font-bold rounded-md transition-transform transform hover:scale-110 bg-red-600 hover:bg-red-500 text-white">-</button>
+                                <button data-action="update-score" data-id="${player.id}" data-sign="1" class="w-8 h-8 flex items-center justify-center text-lg font-bold rounded-md transition-transform transform hover:scale-110 bg-green-600 hover:bg-green-500 text-white">+</button>
+                            </div>
+
+                            <button data-action="delete" data-id="${player.id}" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-error transition-colors" aria-label="Delete ${player.name}">
+                                <i class="fas fa-trash-alt pointer-events-none"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            };
+            
+            const renderPlayers = () => {
+                if (players.length === 0) {
+                    playerContainer.classList.add('hidden');
+                    noPlayersMessage.classList.remove('hidden');
+                } else {
+                    playerContainer.classList.remove('hidden');
+                    noPlayersMessage.classList.add('hidden');
+
+                    const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+                    const uniqueScores = [...new Set(sortedPlayers.map(p => p.score))];
+                    const showCrowns = uniqueScores.length > 1 && players.length > 1;
+                    
+                    let highestScore = null;
+                    let secondHighestScore = null;
+
+                    if (showCrowns) {
+                        highestScore = uniqueScores[0];
+                        secondHighestScore = uniqueScores.length > 1 ? uniqueScores[1] : null;
+                    }
+                    
+                    playerContainer.innerHTML = sortedPlayers.map(player => {
+                        let rank = null;
+                        if (showCrowns) {
+                           if (player.score === highestScore) rank = 'first';
+                           else if (player.score === secondHighestScore) rank = 'second';
+                        }
+                        return getPlayerRowHTML(player, rank);
+                    }).join('');
+                }
+            };
+            
+            // --- EVENT HANDLERS ---
+            
+            const handleAddPlayer = (name) => {
+                if (!name.trim()) {
+                    showNotification('Player name cannot be empty.', 'error');
+                    return;
+                }
+                players.push({
+                    id: Date.now(),
+                    name,
+                    score: 0,
+                    avatarUrl: `https://picsum.photos/seed/${Date.now()}/100`,
+                    previousScore: null,
+                });
+                renderPlayers();
+                modal.classList.add('hidden');
+                addPlayerForm.reset();
+                showNotification(`${name} has joined the game!`, 'success');
+            };
+
+            const handleDeletePlayer = (id) => {
+                players = players.filter(p => p.id !== id);
+                renderPlayers();
+                showNotification('Player removed.', 'success');
+            };
+            
+            const handleUpdateScore = (id, sign) => {
+                const player = players.find(p => p.id === id);
+                if (!player) return;
+                
+                let amount = parseInt(globalScoreStepInput.value, 10);
+                if (isNaN(amount) || amount <= 0) {
+                    amount = 1; // Default to 1 if input is invalid
+                }
+
+                const finalAmount = amount * sign;
+                
+                const oldScore = player.score;
+                const newScore = player.score + finalAmount;
+                player.score = newScore;
+                player.previousScore = oldScore;
+                
+                // Animate
+                const rowEl = document.querySelector(`[data-player-id='${id}']`);
+                if (!rowEl) return;
+                const scoreDisplay = rowEl.querySelector('.score-display');
+                const scoreHistory = rowEl.querySelector('.score-history-display');
+                
+                scoreDisplay.textContent = newScore;
+                scoreHistory.textContent = `was ${oldScore}`;
+
+                const animationClass = finalAmount > 0 ? 'animate-score-up' : 'animate-score-down';
+                scoreDisplay.classList.remove('animate-score-up', 'animate-score-down');
+                // Use requestAnimationFrame to ensure the class removal is processed before adding it again
+                requestAnimationFrame(() => {
+                    scoreDisplay.classList.add(animationClass);
+                    scoreDisplay.addEventListener('animationend', () => {
+                        scoreDisplay.classList.remove(animationClass);
+                    }, { once: true });
+                });
+
+                // Re-render after a delay to sort players based on new score
+                setTimeout(renderPlayers, 800);
+            };
+            
+            const handleResetScores = () => {
+                players.forEach(p => {
+                    p.score = 0;
+                    p.previousScore = null;
+                });
+                renderPlayers();
+                showNotification('All scores have been reset!', 'success');
+            };
+
+            const handleResetClick = () => {
+                if (isResetConfirming) {
+                    handleResetScores();
+                    clearTimeout(resetTimeout);
+                    isResetConfirming = false;
+                    resetLabel.textContent = 'Reset';
+                    resetButton.classList.remove('bg-error', 'hover:bg-red-500');
+                    resetButton.classList.add('bg-warning', 'hover:bg-orange-500');
+                } else {
+                    isResetConfirming = true;
+                    resetLabel.textContent = 'Confirm?';
+                    resetButton.classList.remove('bg-warning', 'hover:bg-orange-500');
+                    resetButton.classList.add('bg-error', 'hover:bg-red-500');
+                    resetTimeout = setTimeout(() => {
+                        isResetConfirming = false;
+                        resetLabel.textContent = 'Reset';
+                        resetButton.classList.remove('bg-error', 'hover:bg-red-500');
+                        resetButton.classList.add('bg-warning', 'hover:bg-orange-500');
+                    }, 3000);
+                }
+            };
+            
+            // --- INITIALIZATION & EVENT LISTENERS ---
+
+            document.body.addEventListener('click', (e) => {
+                const targetButton = e.target.closest('button');
+                if (!targetButton) return;
+
+                const action = targetButton.dataset.action;
+                if (!action) return;
+
+                const id = parseInt(targetButton.dataset.id, 10);
+                const sign = parseInt(targetButton.dataset.sign, 10);
+
+                switch (action) {
+                    case 'open-modal':
+                        modal.classList.remove('hidden');
+                        playerNameInput.focus();
+                        break;
+                    case 'close-modal':
+                        modal.classList.add('hidden');
+                        break;
+                    case 'save':
+                        savePlayersToStorage();
+                        showNotification('Game state saved!', 'success');
+                        break;
+                    case 'load':
+                        players = loadPlayersFromStorage();
+                        renderPlayers();
+                        showNotification(players.length > 0 ? 'Game loaded!' : 'No saved game found.', players.length > 0 ? 'success' : 'error');
+                        break;
+                    case 'export':
+                        exportToCsv();
+                        break;
+                    case 'reset':
+                        handleResetClick();
+                        break;
+                    case 'delete':
+                        handleDeletePlayer(id);
+                        break;
+                    case 'update-score':
+                        handleUpdateScore(id, sign);
+                        break;
+                }
+            });
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+            
+            addPlayerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleAddPlayer(playerNameInput.value);
+            });
+            
+            // Initial Load
+            players = loadPlayersFromStorage();
+            if (players.length > 0) {
+                showNotification('Game loaded from last session!', 'success');
+            }
+            renderPlayers();
+        });
+    </script>
+</body>
 </html>

@@ -1,5 +1,4 @@
 {
   "name": "Game Score Tracker",
-  "description": "A modern, responsive web application to track player scores during a game. It allows adding players, adjusting scores, saving/loading game state to local storage, and exporting scores to a CSV file.",
-  "requestFramePermissions": []
+  "description": "A modern, responsive web application to track player scores during a game. It allows adding players, adjusting scores, saving/loading game state to local storage, and exporting scores to a CSV file."
 }
