@@ -10,7 +10,8 @@
     <script type="importmap">
     {
       "imports": {
-        "@google/genai": "https://esm.run/@google/genai"
+        "@google/genai": "https://esm.run/@google/genai",
+        "xlsx": "https://esm.run/xlsx"
       }
     }
     </script>
@@ -99,7 +100,7 @@
 
         <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-80 flex-col justify-center items-center z-[100] hidden">
             <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-accent"></div>
-            <p class="text-white text-xl mt-4">Analyzing Scoreboard...</p>
+            <p id="loading-text" class="text-white text-xl mt-4">Analyzing Scoreboard...</p>
         </div>
 
         <div class="min-h-screen flex flex-col">
@@ -216,8 +217,8 @@
                     <button data-action="open-api-key-modal" class="w-full px-4 py-3 rounded-md bg-secondary hover:bg-indigo-500 transition-colors text-white font-semibold flex items-center justify-center gap-3">
                         <i class="fas fa-key"></i> Set API Key
                     </button>
-                    <button data-action="trigger-import-image" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
-                        <i class="fas fa-file-image"></i> Import from File
+                    <button data-action="open-import-type-modal" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                        <i class="fas fa-file-import"></i> Import from File
                     </button>
                     <button data-action="trigger-camera" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
                         <i class="fas fa-camera"></i> Take a Photo
@@ -235,6 +236,28 @@
                     Close
                     </button>
                 </div>
+                </div>
+            </div>
+
+            <div id="import-type-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
+                <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
+                    <h2 class="text-2xl font-bold mb-6 text-white text-center">Import From...</h2>
+                    <div class="flex flex-col gap-4">
+                        <button data-action="import-image" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                            <i class="fas fa-file-image"></i> Image File
+                        </button>
+                        <button data-action="import-csv" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                            <i class="fas fa-file-csv"></i> CSV File
+                        </button>
+                        <button data-action="import-excel" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                            <i class="fas fa-file-excel"></i> Excel File
+                        </button>
+                    </div>
+                    <div class="mt-6 flex justify-end">
+                        <button type="button" data-action="close-import-type-modal" class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -285,11 +308,12 @@
             </div>
         </div>
         
-        <input type="file" id="image-upload-input" class="hidden" accept="image/*">
+        <input type="file" id="file-upload-input" class="hidden">
     </div>
 
     <script type="module">
         import { GoogleGenAI, Type } from "@google/genai";
+        import * as XLSX from 'xlsx';
 
         document.addEventListener('DOMContentLoaded', () => {
             const STORAGE_KEY = 'gameScoreTrackerData';
@@ -301,6 +325,8 @@
             let cameraStream = null;
             let draggedPlayerId = null;
             let pendingAction = null; // Store action that needs API key
+            let currentImportType = null; // 'image', 'csv', or 'excel'
+
 
             // --- DOM Elements ---
             // API Key Gate
@@ -322,9 +348,11 @@
             const resetButton = document.getElementById('reset-button');
             const resetLabel = document.getElementById('reset-label');
             const loadingOverlay = document.getElementById('loading-overlay');
-            const imageUploadInput = document.getElementById('image-upload-input');
+            const loadingText = document.getElementById('loading-text');
+            const fileUploadInput = document.getElementById('file-upload-input');
             const totalScoreDisplay = document.getElementById('total-score-display');
             const moreMenuModal = document.getElementById('more-menu-modal');
+            const importTypeModal = document.getElementById('import-type-modal');
             const cameraModal = document.getElementById('camera-modal');
             const cameraFeed = document.getElementById('camera-feed');
             const cameraCanvas = document.getElementById('camera-canvas');
@@ -396,6 +424,17 @@
                 reader.onload = () => resolve(reader.result.split(',')[1]);
                 reader.onerror = error => reject(error);
             });
+
+            const showLoadingOverlay = (text) => {
+                loadingText.textContent = text || 'Processing...';
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+            };
+
+            const hideLoadingOverlay = () => {
+                loadingOverlay.classList.add('hidden');
+                loadingOverlay.classList.remove('flex');
+            };
 
             // --- UI & RENDERING ---
 
@@ -553,7 +592,7 @@
                 pendingAction = null;
             };
 
-            // --- EVENT HANDLERS ---
+            // --- EVENT HANDLERS & CORE LOGIC ---
             
             const handleAddPlayer = (name) => {
                 if (!name.trim()) {
@@ -707,16 +746,37 @@
                 }
             };
             
+            const updatePlayersFromFile = (importedData) => {
+                 if (!importedData || importedData.length === 0) {
+                    showNotification('No valid player data found in the file.', 'error');
+                    return;
+                }
+                 const newPlayers = importedData.map((playerData, i) => {
+                    const newPlayerId = Date.now() + i;
+                    return {
+                        id: newPlayerId,
+                        name: playerData.name,
+                        score: playerData.score,
+                        avatarUrl: `https://source.unsplash.com/100x100/?animal&sig=${newPlayerId}`,
+                        previousScore: null,
+                    };
+                });
+                
+                players = newPlayers;
+                renderPlayers();
+                savePlayersToStorage();
+                showNotification('Scores imported successfully!', 'success');
+            };
+
             const processImageForScores = async (imageSource) => {
                 const apiKey = getApiKey();
                 if (!apiKey) {
-                    showNotification('API Key is required. Please set it in the "More" menu.', 'error');
+                    showNotification('API Key is required for image analysis. Please set it in the "More" menu.', 'error');
                     return;
                 }
                 if (!imageSource) return;
 
-                loadingOverlay.classList.remove('hidden');
-                loadingOverlay.classList.add('flex');
+                showLoadingOverlay('Analyzing Scoreboard...');
 
                 try {
                     const base64Data = await fileToBase64(imageSource);
@@ -746,40 +806,105 @@
                     });
 
                     const extractedData = JSON.parse(response.text);
-                    if (!extractedData || extractedData.length === 0) {
-                        showNotification('Could not extract scores from image.', 'error');
-                        return;
-                    }
-
-                    const newPlayers = extractedData.map((playerData, i) => {
-                        const newPlayerId = Date.now() + i;
-                        return {
-                            id: newPlayerId,
-                            name: playerData.name,
-                            score: playerData.score,
-                            avatarUrl: `https://source.unsplash.com/100x100/?animal&sig=${newPlayerId}`,
-                            previousScore: null,
-                        };
-                    });
-                    
-                    players = newPlayers;
-                    renderPlayers();
-                    savePlayersToStorage();
-                    showNotification('Scores imported successfully!', 'success');
+                    updatePlayersFromFile(extractedData);
 
                 } catch (error) {
                     console.error('Error importing from image:', error);
                     showNotification('Failed to analyze image. Check API key or image quality.', 'error');
                 } finally {
-                    loadingOverlay.classList.add('hidden');
-                    loadingOverlay.classList.remove('flex');
-                    imageUploadInput.value = ''; // Reset for re-uploading same file
+                    hideLoadingOverlay();
                 }
             };
 
-            const handleFileInputChange = (event) => {
+            const processCsvForScores = (file) => {
+                showLoadingOverlay('Processing CSV...');
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const csv = event.target.result;
+                        const lines = csv.split('\n').filter(line => line.trim() !== '');
+                        if (lines.length < 2) throw new Error('CSV file needs a header and at least one data row.');
+                        
+                        // Simple parser assuming "Name,Score" format
+                        const importedData = lines.slice(1).map(line => {
+                            const [name, scoreStr] = line.split(',');
+                            const score = parseInt(scoreStr, 10);
+                            if (!name || isNaN(score)) return null;
+                            return { name: name.trim(), score };
+                        }).filter(Boolean);
+                        
+                        updatePlayersFromFile(importedData);
+                    } catch (error) {
+                         console.error('Error processing CSV:', error);
+                         showNotification(`Failed to process CSV: ${error.message}`, 'error');
+                    } finally {
+                        hideLoadingOverlay();
+                    }
+                };
+                reader.onerror = () => {
+                    showNotification('Error reading the CSV file.', 'error');
+                    hideLoadingOverlay();
+                }
+                reader.readAsText(file);
+            };
+
+            const processExcelForScores = (file) => {
+                showLoadingOverlay('Processing Excel file...');
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(worksheet);
+
+                        const importedData = json.map(row => {
+                            // Case-insensitive key matching
+                            const nameKey = Object.keys(row).find(k => k.toLowerCase() === 'name');
+                            const scoreKey = Object.keys(row).find(k => k.toLowerCase() === 'score');
+                            
+                            if (!nameKey || !scoreKey) return null;
+
+                            const score = parseInt(row[scoreKey], 10);
+                            if (isNaN(score)) return null;
+                            
+                            return { name: String(row[nameKey]), score };
+                        }).filter(Boolean);
+                        
+                        updatePlayersFromFile(importedData);
+                    } catch (error) {
+                        console.error('Error processing Excel file:', error);
+                        showNotification('Failed to process Excel file. Ensure it has "Name" and "Score" columns.', 'error');
+                    } finally {
+                        hideLoadingOverlay();
+                    }
+                };
+                 reader.onerror = () => {
+                    showNotification('Error reading the Excel file.', 'error');
+                    hideLoadingOverlay();
+                }
+                reader.readAsArrayBuffer(file);
+            };
+
+            const handleFileImport = (event) => {
                 const file = event.target.files[0];
-                processImageForScores(file);
+                if (!file) return;
+
+                switch (currentImportType) {
+                    case 'image':
+                        processImageForScores(file);
+                        break;
+                    case 'csv':
+                        processCsvForScores(file);
+                        break;
+                    case 'excel':
+                        processExcelForScores(file);
+                        break;
+                    default:
+                        showNotification('Unknown file type to import.', 'error');
+                }
+                fileUploadInput.value = ''; // Reset for re-uploading same file
             };
 
             // --- CAMERA FUNCTIONS ---
@@ -884,6 +1009,23 @@
                 }
             };
 
+            const triggerFileInput = (type) => {
+                currentImportType = type;
+                switch (type) {
+                    case 'image':
+                        fileUploadInput.accept = 'image/*';
+                        break;
+                    case 'csv':
+                        fileUploadInput.accept = '.csv, text/csv';
+                        break;
+                    case 'excel':
+                        fileUploadInput.accept = '.xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel';
+                        break;
+                }
+                importTypeModal.classList.add('hidden');
+                fileUploadInput.click();
+            };
+
             // --- EVENT LISTENERS ---
 
             document.body.addEventListener('click', (e) => {
@@ -918,16 +1060,28 @@
                         exportToCsv();
                         moreMenuModal.classList.add('hidden');
                         break;
-                    case 'trigger-import-image':
+                    case 'open-import-type-modal':
                         moreMenuModal.classList.add('hidden');
-                        if (getApiKey()) {
-                           imageUploadInput.click();
-                        }
+                        importTypeModal.classList.remove('hidden');
+                        break;
+                    case 'close-import-type-modal':
+                        importTypeModal.classList.add('hidden');
+                        break;
+                    case 'import-image':
+                        triggerFileInput('image');
+                        break;
+                     case 'import-csv':
+                        triggerFileInput('csv');
+                        break;
+                     case 'import-excel':
+                        triggerFileInput('excel');
                         break;
                     case 'trigger-camera':
                         moreMenuModal.classList.add('hidden');
                          if (getApiKey()) {
                            startCamera();
+                        } else {
+                            showNotification('API key needed for camera import.', 'error');
                         }
                         break;
                     case 'close-camera-modal':
@@ -975,6 +1129,9 @@
             });
              moreMenuModal.addEventListener('click', (e) => {
                 if (e.target === moreMenuModal) moreMenuModal.classList.add('hidden');
+            });
+            importTypeModal.addEventListener('click', (e) => {
+                if (e.target === importTypeModal) importTypeModal.classList.add('hidden');
             });
             apiKeyModal.addEventListener('click', (e) => {
                 if (e.target === apiKeyModal) closeApiKeyModal();
@@ -1036,7 +1193,7 @@
                 }
             });
 
-            imageUploadInput.addEventListener('change', handleFileInputChange);
+            fileUploadInput.addEventListener('change', handleFileImport);
             
             playerContainer.addEventListener('dragstart', (e) => {
                 const playerRow = e.target.closest('[data-player-id]');
