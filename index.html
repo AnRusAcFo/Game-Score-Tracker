@@ -4,9 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game Score Tracker</title>
-    <meta name="description" content="A modern, responsive web application to track player scores during a game.">
+    <meta name="description" content="A modern, responsive web application to track player scores during a game. It allows adding players, adjusting scores, saving/loading game state to local storage, and exporting scores to a CSV file.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.run/@google/genai"
+      }
+    }
+    </script>
     <script>
       tailwind.config = {
         theme: {
@@ -73,13 +80,22 @@
 
     <div id="notification-container" class="fixed top-5 right-5 z-[60]"></div>
 
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-80 flex-col justify-center items-center z-[100] hidden">
+        <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-accent"></div>
+        <p class="text-white text-xl mt-4">Analyzing Scoreboard...</p>
+    </div>
+
     <div class="min-h-screen flex flex-col">
-        <header class="bg-neutral shadow-lg">
-          <div class="container mx-auto px-4 py-4">
-            <h1 class="text-2xl sm:text-3xl font-bold text-center text-white tracking-wider">
-              <i class="fas fa-gamepad mr-3 text-accent"></i>
+        <header class="bg-neutral shadow-lg sticky top-0 z-50">
+          <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl sm:text-2xl font-bold text-white tracking-wider">
+              <i class="fas fa-gamepad mr-2 text-accent"></i>
               Game Score Tracker
             </h1>
+            <div class="text-right">
+                <span class="text-gray-400 text-xs font-medium uppercase tracking-wider">Total</span>
+                <p id="total-score-display" class="text-3xl font-extrabold text-white tracking-tighter">0</p>
+            </div>
           </div>
         </header>
 
@@ -98,6 +114,7 @@
             <div class="flex justify-center items-center gap-2 mb-3">
                 <button data-action="set-mode" data-mode="input" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Input</button>
                 <button data-action="set-mode" data-mode="preset" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-accent text-white">Preset</button>
+                <button data-action="set-mode" data-mode="auto" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Auto</button>
             </div>
             <div id="score-controls-container" class="mb-3">
                 <div id="input-mode-controls" class="hidden flex justify-center items-center">
@@ -133,9 +150,9 @@
                 <button data-action="open-modal" aria-label="Add Player" class="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent hover:bg-emerald-500 text-white shadow-lg transform transition hover:scale-110 -translate-y-4">
                   <i class="fas fa-plus text-2xl pointer-events-none"></i>
                 </button>
-                <button data-action="export" aria-label="Export" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
-                    <i class="fas fa-file-csv text-lg sm:text-xl pointer-events-none"></i>
-                    <span class="pointer-events-none">Export</span>
+                <button data-action="open-more-menu" aria-label="More Options" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                    <i class="fas fa-ellipsis-h text-lg sm:text-xl pointer-events-none"></i>
+                    <span class="pointer-events-none">More</span>
                 </button>
                 <button id="reset-button" data-action="reset" aria-label="Reset" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-warning hover:bg-orange-500">
                     <i id="reset-icon" class="fas fa-sync-alt text-lg sm:text-xl pointer-events-none"></i>
@@ -174,15 +191,62 @@
             </form>
           </div>
         </div>
-    </div>
 
-    <script>
+        <div id="more-menu-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
+            <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
+              <h2 class="text-2xl font-bold mb-6 text-white text-center">More Options</h2>
+              <div class="flex flex-col gap-4">
+                  <button data-action="trigger-import-image" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                      <i class="fas fa-file-image"></i> Import from File
+                  </button>
+                  <button data-action="trigger-camera" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                      <i class="fas fa-camera"></i> Take a Photo
+                  </button>
+                  <button data-action="export" class="w-full px-4 py-3 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                      <i class="fas fa-file-csv"></i> Export to CSV
+                  </button>
+              </div>
+              <div class="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  data-action="close-more-menu"
+                  class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+        </div>
+
+        <div id="camera-modal" class="fixed inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center z-[60] p-4 hidden">
+            <video id="camera-feed" class="w-full h-auto max-w-4xl max-h-[70vh] rounded-lg" playsinline autoplay></video>
+            <canvas id="camera-canvas" class="hidden"></canvas>
+            <div id="camera-capture-controls" class="mt-4 flex gap-4">
+                <button data-action="capture-photo" class="w-16 h-16 rounded-full bg-white flex items-center justify-center transform transition hover:scale-110" aria-label="Capture Photo">
+                    <div class="w-14 h-14 rounded-full border-4 border-neutral bg-white"></div>
+                </button>
+            </div>
+            <div id="camera-confirm-controls" class="mt-4 flex gap-4 hidden">
+                 <button data-action="retake-photo" class="px-6 py-3 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Retake</button>
+                 <button data-action="use-photo" class="px-6 py-3 rounded-md bg-accent hover:bg-emerald-500 text-white font-semibold">Use Photo</button>
+            </div>
+            <button data-action="close-camera-modal" class="absolute top-4 right-4 text-white text-3xl font-bold w-10 h-10 flex items-center justify-center bg-black bg-opacity-50 rounded-full" aria-label="Close camera">&times;</button>
+        </div>
+    </div>
+    
+    <input type="file" id="image-upload-input" class="hidden" accept="image/*">
+
+    <script type="module">
+        import { GoogleGenAI, Type } from "@google/genai";
+
         document.addEventListener('DOMContentLoaded', () => {
             const STORAGE_KEY = 'gameScoreTrackerData';
             let players = [];
             let isResetConfirming = false;
             let resetTimeout = null;
-            let currentMode = 'preset'; // 'input' or 'preset'
+            let currentMode = 'preset'; // 'input', 'preset', or 'auto'
+            let cameraStream = null;
+            let draggedPlayerId = null;
 
             // DOM Elements
             const playerContainer = document.getElementById('player-container');
@@ -193,13 +257,21 @@
             const notificationContainer = document.getElementById('notification-container');
             const resetButton = document.getElementById('reset-button');
             const resetLabel = document.getElementById('reset-label');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const imageUploadInput = document.getElementById('image-upload-input');
+            const totalScoreDisplay = document.getElementById('total-score-display');
+            const moreMenuModal = document.getElementById('more-menu-modal');
+            const cameraModal = document.getElementById('camera-modal');
+            const cameraFeed = document.getElementById('camera-feed');
+            const cameraCanvas = document.getElementById('camera-canvas');
+            const cameraCaptureControls = document.getElementById('camera-capture-controls');
+            const cameraConfirmControls = document.getElementById('camera-confirm-controls');
             
             // Mode-specific DOM elements
             const modeButtons = document.querySelectorAll('.mode-button');
             const inputModeControls = document.getElementById('input-mode-controls');
             const presetModeControls = document.getElementById('preset-mode-controls');
             const globalScoreStepInput = document.getElementById('global-score-step');
-
 
             // --- SERVICES ---
 
@@ -249,6 +321,13 @@
                 showNotification('Scores exported to CSV!', 'success');
             };
 
+            const fileToBase64 = (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+
             // --- UI & RENDERING ---
 
             const showNotification = (message, type) => {
@@ -271,6 +350,22 @@
                 }, 2700);
             };
 
+            const updateTotalScore = () => {
+                if (!totalScoreDisplay) return;
+                const totalScore = players.reduce((sum, p) => sum + p.score, 0);
+                totalScoreDisplay.textContent = totalScore;
+                
+                totalScoreDisplay.classList.remove('text-green-400', 'text-red-400', 'text-white');
+                if (totalScore > 0) {
+                    totalScoreDisplay.textContent = `+${totalScore}`;
+                    totalScoreDisplay.classList.add('text-green-400');
+                } else if (totalScore < 0) {
+                    totalScoreDisplay.classList.add('text-red-400');
+                } else {
+                    totalScoreDisplay.classList.add('text-white');
+                }
+            };
+            
             const getPlayerRowHTML = (player, rank) => {
                 const crowns = {
                     first: `<i class="fas fa-crown text-yellow-400 absolute -top-1 -left-1 text-lg transform -rotate-12" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5)"></i>`,
@@ -282,7 +377,14 @@
                     : `<span class="text-xs text-gray-500 score-history-display"></span>`;
 
                 return `
-                    <div class="bg-neutral rounded-lg shadow-lg flex items-center p-3 gap-3" data-player-id="${player.id}">
+                    <div draggable="true" class="bg-neutral rounded-lg shadow-lg flex items-center p-3 gap-3" data-player-id="${player.id}">
+                        <!-- Delete button moved to the left -->
+                        <div class="flex-shrink-0">
+                            <button data-action="delete" data-id="${player.id}" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-error transition-colors" aria-label="Delete ${player.name}">
+                                <i class="fas fa-trash-alt text-lg pointer-events-none"></i>
+                            </button>
+                        </div>
+
                         <div class="relative flex-shrink-0">
                             <img src="${player.avatarUrl}" alt="${player.name}'s avatar" class="w-12 h-12 rounded-full border-2 border-accent" />
                             ${rank ? crowns[rank] : ''}
@@ -291,17 +393,12 @@
                             <h2 class="text-lg font-bold text-white truncate">${player.name}</h2>
                             ${previousScoreHTML}
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <p class="text-2xl font-extrabold text-white tracking-tighter w-16 text-center score-display rounded-md">${player.score}</p>
-                            
-                            <div class="flex items-center gap-2">
-                                <button data-action="update-score" data-id="${player.id}" data-sign="-1" class="w-8 h-8 flex items-center justify-center text-lg font-bold rounded-md transition-transform transform hover:scale-110 bg-red-600 hover:bg-red-500 text-white">-</button>
-                                <button data-action="update-score" data-id="${player.id}" data-sign="1" class="w-8 h-8 flex items-center justify-center text-lg font-bold rounded-md transition-transform transform hover:scale-110 bg-green-600 hover:bg-green-500 text-white">+</button>
-                            </div>
-
-                            <button data-action="delete" data-id="${player.id}" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-error transition-colors" aria-label="Delete ${player.name}">
-                                <i class="fas fa-trash-alt pointer-events-none"></i>
-                            </button>
+                        
+                        <!-- Grouped score controls -->
+                        <div class="flex items-center gap-3 flex-shrink-0">
+                            <button data-action="update-score" data-id="${player.id}" data-sign="-1" class="w-10 h-10 flex items-center justify-center text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-red-600 hover:bg-red-500 text-white">-</button>
+                            <p class="text-3xl font-extrabold text-white tracking-tighter w-20 text-center score-display rounded-md">${player.score}</p>
+                            <button data-action="update-score" data-id="${player.id}" data-sign="1" class="w-10 h-10 flex items-center justify-center text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-green-600 hover:bg-green-500 text-white">+</button>
                         </div>
                     </div>
                 `;
@@ -336,14 +433,16 @@
                         return getPlayerRowHTML(player, rank);
                     }).join('');
                 }
+                updateTotalScore();
             };
             
             const setMode = (newMode) => {
                 currentMode = newMode;
+                // 'auto' mode will show the preset controls as it uses them for the base value
                 if (currentMode === 'input') {
                     inputModeControls.classList.remove('hidden');
                     presetModeControls.classList.add('hidden');
-                } else {
+                } else { // 'preset' or 'auto'
                     inputModeControls.classList.add('hidden');
                     presetModeControls.classList.remove('hidden');
                 }
@@ -366,11 +465,12 @@
                     showNotification('Player name cannot be empty.', 'error');
                     return;
                 }
+                const newPlayerId = Date.now();
                 players.push({
-                    id: Date.now(),
+                    id: newPlayerId,
                     name,
                     score: 0,
-                    avatarUrl: `https://picsum.photos/seed/${Date.now()}/100`,
+                    avatarUrl: `https://source.unsplash.com/100x100/?animal&sig=${newPlayerId}`,
                     previousScore: null,
                 });
                 renderPlayers();
@@ -386,48 +486,76 @@
             };
             
             const handleUpdateScore = (id, sign) => {
-                const player = players.find(p => p.id === id);
-                if (!player) return;
-                
                 let amount;
                 if (currentMode === 'input') {
                     amount = parseInt(globalScoreStepInput.value, 10);
-                    if (isNaN(amount) || amount <= 0) {
-                        amount = 1; // Default to 1 if input is invalid
-                    }
-                } else { // preset mode
+                    if (isNaN(amount) || amount <= 0) amount = 1;
+                } else { // 'preset' or 'auto' mode
                     const selectedPreset = document.querySelector('input[name="preset-score"]:checked');
                     amount = selectedPreset ? parseInt(selectedPreset.value, 10) : 10;
                 }
 
-                const finalAmount = amount * sign;
-                
-                const oldScore = player.score;
-                const newScore = player.score + finalAmount;
-                player.score = newScore;
-                player.previousScore = oldScore;
-                
-                // Animate
-                const rowEl = document.querySelector(`[data-player-id='${id}']`);
-                if (!rowEl) return;
-                const scoreDisplay = rowEl.querySelector('.score-display');
-                const scoreHistory = rowEl.querySelector('.score-history-display');
-                
-                scoreDisplay.textContent = newScore;
-                scoreHistory.textContent = `was ${oldScore}`;
+                if (currentMode === 'auto' && players.length > 1) {
+                    const winnerAmount = amount * (players.length - 1);
+                    const loserAmount = -amount;
+                    
+                    players.forEach(p => {
+                        p.previousScore = p.score;
+                        if (p.id === id) { // The clicked player
+                            p.score += (sign > 0 ? winnerAmount : -winnerAmount);
+                        } else { // All other players
+                            p.score += (sign > 0 ? loserAmount : -loserAmount);
+                        }
+                    });
 
-                const animationClass = finalAmount > 0 ? 'animate-score-up' : 'animate-score-down';
-                scoreDisplay.classList.remove('animate-score-up', 'animate-score-down');
-                // Use requestAnimationFrame to ensure the class removal is processed before adding it again
-                requestAnimationFrame(() => {
-                    scoreDisplay.classList.add(animationClass);
-                    scoreDisplay.addEventListener('animationend', () => {
-                        scoreDisplay.classList.remove(animationClass);
-                    }, { once: true });
-                });
+                    // Update the DOM for ALL players without re-rendering the list
+                    players.forEach(p => {
+                        const rowEl = document.querySelector(`[data-player-id='${p.id}']`);
+                        if (rowEl) {
+                            const scoreDisplay = rowEl.querySelector('.score-display');
+                            const historyDisplay = rowEl.querySelector('.score-history-display');
+                            
+                            scoreDisplay.textContent = p.score;
+                            historyDisplay.textContent = `was ${p.previousScore}`;
 
-                // Re-render after a delay to sort players based on new score
-                setTimeout(renderPlayers, 800);
+                            if (p.id === id) { // Animate only the clicked player
+                                const animationClass = sign > 0 ? 'animate-score-up' : 'animate-score-down';
+                                scoreDisplay.classList.remove('animate-score-up', 'animate-score-down');
+                                requestAnimationFrame(() => {
+                                    scoreDisplay.classList.add(animationClass);
+                                    scoreDisplay.addEventListener('animationend', () => scoreDisplay.classList.remove(animationClass), { once: true });
+                                });
+                            }
+                        }
+                    });
+
+                } else {
+                    const player = players.find(p => p.id === id);
+                    if (!player) return;
+                    
+                    const finalAmount = amount * sign;
+                    player.previousScore = player.score;
+                    player.score += finalAmount;
+
+                    // Update the UI for the specific player without re-rendering the whole list
+                    const rowEl = document.querySelector(`[data-player-id='${id}']`);
+                    if (rowEl) {
+                        const scoreDisplay = rowEl.querySelector('.score-display');
+                        const historyDisplay = rowEl.querySelector('.score-history-display');
+                        
+                        scoreDisplay.textContent = player.score;
+                        historyDisplay.textContent = `was ${player.previousScore}`;
+
+                        const animationClass = finalAmount > 0 ? 'animate-score-up' : 'animate-score-down';
+                        scoreDisplay.classList.remove('animate-score-up', 'animate-score-down');
+                        requestAnimationFrame(() => {
+                            scoreDisplay.classList.add(animationClass);
+                            scoreDisplay.addEventListener('animationend', () => scoreDisplay.classList.remove(animationClass), { once: true });
+                        });
+                    }
+                }
+                
+                updateTotalScore();
             };
             
             const handleResetScores = () => {
@@ -437,6 +565,29 @@
                 });
                 renderPlayers();
                 showNotification('All scores have been reset!', 'success');
+            };
+            
+            const handleMergePlayers = (draggedId, targetId) => {
+                if (draggedId === targetId) return;
+
+                const draggedPlayerIndex = players.findIndex(p => p.id === draggedId);
+                const targetPlayerIndex = players.findIndex(p => p.id === targetId);
+
+                if (draggedPlayerIndex === -1 || targetPlayerIndex === -1) return;
+
+                const draggedPlayer = players[draggedPlayerIndex];
+                const targetPlayer = players[targetPlayerIndex];
+
+                // Combine names and scores
+                targetPlayer.name = `${draggedPlayer.name} & ${targetPlayer.name}`;
+                targetPlayer.score += draggedPlayer.score;
+                targetPlayer.previousScore = null; // Merged player has no 'previous' score
+
+                // Remove the dragged player
+                players.splice(draggedPlayerIndex, 1);
+                
+                renderPlayers();
+                showNotification('Players merged!', 'success');
             };
 
             const handleResetClick = () => {
@@ -461,6 +612,119 @@
                 }
             };
             
+            const processImageForScores = async (imageSource) => {
+                if (!imageSource) return;
+
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+
+                try {
+                    const base64Data = await fileToBase64(imageSource);
+                    const mimeType = imageSource.type;
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    
+                    const imagePart = { inlineData: { mimeType, data: base64Data } };
+                    const textPart = { text: "Analyze this image of a game scoreboard. Extract each player's name and their corresponding score. Return the data as a JSON array of objects, where each object has a 'name' (string) and a 'score' (number). If you cannot find players or scores, return an empty array." };
+
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: { parts: [imagePart, textPart] },
+                        config: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        name: { type: Type.STRING },
+                                        score: { type: Type.NUMBER },
+                                    },
+                                    required: ["name", "score"],
+                                },
+                            },
+                        },
+                    });
+
+                    const extractedData = JSON.parse(response.text);
+                    if (!extractedData || extractedData.length === 0) {
+                        showNotification('Could not extract scores from image.', 'error');
+                        return;
+                    }
+
+                    const newPlayers = extractedData.map((playerData, i) => {
+                        const newPlayerId = Date.now() + i;
+                        return {
+                            id: newPlayerId,
+                            name: playerData.name,
+                            score: playerData.score,
+                            avatarUrl: `https://source.unsplash.com/100x100/?animal&sig=${newPlayerId}`,
+                            previousScore: null,
+                        };
+                    });
+                    
+                    players = newPlayers;
+                    renderPlayers();
+                    savePlayersToStorage();
+                    showNotification('Scores imported successfully!', 'success');
+
+                } catch (error) {
+                    console.error('Error importing from image:', error);
+                    showNotification('Failed to analyze image. Please try again.', 'error');
+                } finally {
+                    loadingOverlay.classList.add('hidden');
+                    loadingOverlay.classList.remove('flex');
+                    imageUploadInput.value = ''; // Reset for re-uploading same file
+                }
+            };
+
+            const handleFileInputChange = (event) => {
+                const file = event.target.files[0];
+                processImageForScores(file);
+            };
+
+            // --- CAMERA FUNCTIONS ---
+            const startCamera = async () => {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    cameraFeed.srcObject = cameraStream;
+                    cameraModal.classList.remove('hidden');
+                    cameraFeed.classList.remove('hidden');
+                    cameraCaptureControls.classList.remove('hidden');
+                    cameraConfirmControls.classList.add('hidden');
+                } catch (err) {
+                    console.error("Camera error:", err);
+                    showNotification('Could not access camera. Check permissions.', 'error');
+                }
+            };
+            
+            const stopCamera = () => {
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
+                cameraModal.classList.add('hidden');
+            };
+
+            const capturePhoto = () => {
+                cameraCanvas.width = cameraFeed.videoWidth;
+                cameraCanvas.height = cameraFeed.videoHeight;
+                cameraCanvas.getContext('2d').drawImage(cameraFeed, 0, 0);
+                
+                cameraFeed.classList.add('hidden');
+                cameraCaptureControls.classList.add('hidden');
+                cameraConfirmControls.classList.remove('hidden');
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
+            };
+            
+            const useCapturedPhoto = () => {
+                cameraCanvas.toBlob(blob => {
+                    processImageForScores(blob);
+                }, 'image/jpeg', 0.95);
+                stopCamera();
+            };
+
+
             // --- INITIALIZATION & EVENT LISTENERS ---
 
             document.body.addEventListener('click', (e) => {
@@ -482,8 +746,9 @@
                         modal.classList.add('hidden');
                         break;
                     case 'save':
+                        renderPlayers(); // Re-sort and apply ranks
                         savePlayersToStorage();
-                        showNotification('Game state saved!', 'success');
+                        showNotification('Game saved & ranked!', 'success');
                         break;
                     case 'load':
                         players = loadPlayersFromStorage();
@@ -492,6 +757,27 @@
                         break;
                     case 'export':
                         exportToCsv();
+                        moreMenuModal.classList.add('hidden');
+                        break;
+                    case 'trigger-import-image':
+                        imageUploadInput.click();
+                        moreMenuModal.classList.add('hidden');
+                        break;
+                    case 'trigger-camera':
+                        startCamera();
+                        moreMenuModal.classList.add('hidden');
+                        break;
+                    case 'close-camera-modal':
+                        stopCamera();
+                        break;
+                    case 'capture-photo':
+                        capturePhoto();
+                        break;
+                    case 'retake-photo':
+                        startCamera();
+                        break;
+                    case 'use-photo':
+                        useCapturedPhoto();
                         break;
                     case 'reset':
                         handleResetClick();
@@ -505,6 +791,12 @@
                     case 'set-mode':
                         setMode(targetButton.dataset.mode);
                         break;
+                    case 'open-more-menu':
+                        moreMenuModal.classList.remove('hidden');
+                        break;
+                    case 'close-more-menu':
+                        moreMenuModal.classList.add('hidden');
+                        break;
                 }
             });
             
@@ -513,12 +805,63 @@
                     modal.classList.add('hidden');
                 }
             });
+             moreMenuModal.addEventListener('click', (e) => {
+                if (e.target === moreMenuModal) {
+                    moreMenuModal.classList.add('hidden');
+                }
+            });
             
             addPlayerForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 handleAddPlayer(playerNameInput.value);
             });
+
+            imageUploadInput.addEventListener('change', handleFileInputChange);
             
+            // Drag and Drop Listeners for Merging
+            playerContainer.addEventListener('dragstart', (e) => {
+                const playerRow = e.target.closest('[data-player-id]');
+                if (!playerRow) return;
+                draggedPlayerId = parseInt(playerRow.dataset.playerId, 10);
+                e.dataTransfer.setData('text/plain', draggedPlayerId);
+                setTimeout(() => {
+                    playerRow.classList.add('opacity-50');
+                }, 0);
+            });
+
+            playerContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const targetRow = e.target.closest('[data-player-id]');
+                if (targetRow && parseInt(targetRow.dataset.playerId, 10) !== draggedPlayerId) {
+                    targetRow.classList.add('border-2', 'border-dashed', 'border-accent');
+                }
+            });
+
+            playerContainer.addEventListener('dragleave', (e) => {
+                const targetRow = e.target.closest('[data-player-id]');
+                if (targetRow) {
+                    targetRow.classList.remove('border-2', 'border-dashed', 'border-accent');
+                }
+            });
+
+            playerContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const targetRow = e.target.closest('[data-player-id]');
+                if (!targetRow) return;
+                
+                targetRow.classList.remove('border-2', 'border-dashed', 'border-accent');
+                const targetId = parseInt(targetRow.dataset.playerId, 10);
+                const draggedId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                handleMergePlayers(draggedId, targetId);
+            });
+
+            playerContainer.addEventListener('dragend', (e) => {
+                draggedPlayerId = null;
+                document.querySelectorAll('[data-player-id]').forEach(row => {
+                    row.classList.remove('opacity-50', 'border-2', 'border-dashed', 'border-accent');
+                });
+            });
+
             // Initial Load
             setMode('preset'); // Set default mode on load
             players = loadPlayersFromStorage();
