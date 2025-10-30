@@ -785,8 +785,12 @@
             // --- CAMERA FUNCTIONS ---
             const startCamera = async () => {
                 try {
+                    if (cameraStream) {
+                        cameraStream.getTracks().forEach(track => track.stop());
+                    }
                     cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                     cameraFeed.srcObject = cameraStream;
+                    cameraFeed.play(); // Explicitly play the video stream
                     cameraModal.classList.remove('hidden');
                     cameraFeed.classList.remove('hidden');
                     cameraCaptureControls.classList.remove('hidden');
@@ -800,7 +804,9 @@
             const stopCamera = () => {
                 if (cameraStream) {
                     cameraStream.getTracks().forEach(track => track.stop());
+                    cameraStream = null;
                 }
+                cameraFeed.srcObject = null;
                 cameraModal.classList.add('hidden');
             };
 
