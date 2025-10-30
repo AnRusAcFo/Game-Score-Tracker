@@ -78,177 +78,241 @@
 </head>
 <body class="bg-base-100 text-gray-200 font-sans">
 
-    <div id="notification-container" class="fixed top-5 right-5 z-[60]"></div>
-
-    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-80 flex-col justify-center items-center z-[100] hidden">
-        <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-accent"></div>
-        <p class="text-white text-xl mt-4">Analyzing Scoreboard...</p>
+    <div id="api-key-gate" class="fixed inset-0 bg-base-100 flex justify-center items-center z-[200] p-4 transition-opacity duration-300">
+        <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-md mx-auto text-center">
+            <h2 class="text-3xl font-bold mb-2 text-white">Welcome!</h2>
+            <p class="text-gray-400 mb-6">Please enter your Google Gemini API key to continue.</p>
+            <form id="api-key-gate-form">
+                <input id="api-key-gate-input" type="password" placeholder="Enter your API Key" class="w-full px-4 py-2 bg-base-100 border-2 border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-white text-center" required />
+                <p id="api-key-gate-error" class="text-error text-sm mt-2 h-5"></p>
+                <button type="submit" class="w-full mt-4 px-4 py-3 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold flex items-center justify-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    <span id="api-key-gate-button-text">Verify & Continue</span>
+                    <i id="api-key-gate-spinner" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+            </form>
+            <p class="text-gray-500 mt-4 text-xs">Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent underline hover:text-emerald-400">Google AI Studio</a>.</p>
+        </div>
     </div>
 
-    <div class="min-h-screen flex flex-col">
-        <header class="bg-neutral shadow-lg sticky top-0 z-50">
-          <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 class="text-xl sm:text-2xl font-bold text-white tracking-wider">
-              <i class="fas fa-gamepad mr-2 text-accent"></i>
-              Game Score Tracker
-            </h1>
-            <div class="text-right">
-                <span class="text-gray-400 text-xs font-medium uppercase tracking-wider">Total</span>
-                <p id="total-score-display" class="text-3xl font-extrabold text-white tracking-tighter">0</p>
-            </div>
-          </div>
-        </header>
+    <div id="main-app-container" class="hidden">
+        <div id="notification-container" class="fixed top-5 right-5 z-[60]"></div>
 
-        <main class="flex-grow container mx-auto px-4 py-8 pb-48">
-            <div id="no-players-message" class="text-center mt-20 hidden">
-                <p class="text-gray-400 text-2xl">No players yet.</p>
-                <p class="text-gray-500 mt-2">Click "Add Player" to start the game!</p>
-            </div>
-            <div id="player-container" class="flex flex-col gap-3">
-                <!-- Player rows will be injected here -->
-            </div>
-        </main>
+        <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-80 flex-col justify-center items-center z-[100] hidden">
+            <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-accent"></div>
+            <p class="text-white text-xl mt-4">Analyzing Scoreboard...</p>
+        </div>
 
-        <footer class="fixed bottom-0 left-0 right-0 bg-neutral/80 backdrop-blur-sm shadow-t-xl z-40">
-          <div class="container mx-auto px-4 py-3">
-            <div class="flex justify-center items-center gap-2 mb-3">
-                <button data-action="set-mode" data-mode="input" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Input</button>
-                <button data-action="set-mode" data-mode="preset" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-accent text-white">Preset</button>
-                <button data-action="set-mode" data-mode="auto" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Auto</button>
-            </div>
-            <div id="score-controls-container" class="mb-3">
-                <div id="input-mode-controls" class="hidden flex justify-center items-center">
-                    <label for="global-score-step" class="mr-3 font-semibold text-lg text-white">Step:</label>
-                    <input id="global-score-step" type="number" value="1" min="1" class="w-24 h-10 text-center bg-base-100 border-2 border-gray-600 rounded-md text-white text-lg focus:outline-none focus:ring-2 focus:ring-accent">
+        <div class="min-h-screen flex flex-col">
+            <header class="bg-neutral shadow-lg sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <h1 class="text-xl sm:text-2xl font-bold text-white tracking-wider">
+                <i class="fas fa-gamepad mr-2 text-accent"></i>
+                Game Score Tracker
+                </h1>
+                <div class="text-right">
+                    <span class="text-gray-400 text-xs font-medium uppercase tracking-wider">Total</span>
+                    <p id="total-score-display" class="text-3xl font-extrabold text-white tracking-tighter">0</p>
                 </div>
-                <div id="preset-mode-controls" class="">
-                    <div class="flex justify-center items-center gap-x-4">
-                        <label class="flex items-center space-x-2 text-white font-semibold">
-                            <input type="radio" name="preset-score" value="5" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
-                            <span>5</span>
-                        </label>
-                        <label class="flex items-center space-x-2 text-white font-semibold">
-                            <input type="radio" name="preset-score" value="10" checked class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
-                            <span>10</span>
-                        </label>
-                        <label class="flex items-center space-x-2 text-white font-semibold">
-                            <input type="radio" name="preset-score" value="20" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
-                            <span>20</span>
-                        </label>
+            </div>
+            </header>
+
+            <main class="flex-grow container mx-auto px-4 py-8 pb-48">
+                <div id="no-players-message" class="text-center mt-20 hidden">
+                    <p class="text-gray-400 text-2xl">No players yet.</p>
+                    <p class="text-gray-500 mt-2">Click "Add Player" to start the game!</p>
+                </div>
+                <div id="player-container" class="flex flex-col gap-3">
+                    <!-- Player rows will be injected here -->
+                </div>
+            </main>
+
+            <footer class="fixed bottom-0 left-0 right-0 bg-neutral/80 backdrop-blur-sm shadow-t-xl z-40">
+            <div class="container mx-auto px-4 py-3">
+                <div class="flex justify-center items-center gap-2 mb-3">
+                    <button data-action="set-mode" data-mode="input" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Input</button>
+                    <button data-action="set-mode" data-mode="preset" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-accent text-white">Preset</button>
+                    <button data-action="set-mode" data-mode="auto" class="mode-button px-4 py-1.5 rounded-md text-sm font-semibold transition-colors bg-primary text-white">Auto</button>
+                </div>
+                <div id="score-controls-container" class="mb-3">
+                    <div id="input-mode-controls" class="hidden flex justify-center items-center">
+                        <label for="global-score-step" class="mr-3 font-semibold text-lg text-white">Step:</label>
+                        <input id="global-score-step" type="number" value="1" min="1" class="w-24 h-10 text-center bg-base-100 border-2 border-gray-600 rounded-md text-white text-lg focus:outline-none focus:ring-2 focus:ring-accent">
+                    </div>
+                    <div id="preset-mode-controls" class="">
+                        <div class="flex justify-center items-center gap-x-4">
+                            <label class="flex items-center space-x-2 text-white font-semibold">
+                                <input type="radio" name="preset-score" value="5" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                                <span>5</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-white font-semibold">
+                                <input type="radio" name="preset-score" value="10" checked class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                                <span>10</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-white font-semibold">
+                                <input type="radio" name="preset-score" value="20" class="form-radio h-4 w-4 text-accent bg-gray-700 border-gray-500 focus:ring-accent">
+                                <span>20</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
+                <div class="flex justify-around items-center">
+                    <button data-action="save" aria-label="Save" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                        <i class="fas fa-save text-lg sm:text-xl pointer-events-none"></i>
+                        <span class="pointer-events-none">Save</span>
+                    </button>
+                    <button data-action="load" aria-label="Load" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                        <i class="fas fa-upload text-lg sm:text-xl pointer-events-none"></i>
+                        <span class="pointer-events-none">Load</span>
+                    </button>
+                    <button data-action="open-modal" aria-label="Add Player" class="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent hover:bg-emerald-500 text-white shadow-lg transform transition hover:scale-110 -translate-y-4">
+                    <i class="fas fa-plus text-2xl pointer-events-none"></i>
+                    </button>
+                    <button data-action="open-more-menu" aria-label="More Options" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
+                        <i class="fas fa-ellipsis-h text-lg sm:text-xl pointer-events-none"></i>
+                        <span class="pointer-events-none">More</span>
+                    </button>
+                    <button id="reset-button" data-action="reset" aria-label="Reset" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-warning hover:bg-orange-500">
+                        <i id="reset-icon" class="fas fa-sync-alt text-lg sm:text-xl pointer-events-none"></i>
+                        <span id="reset-label" class="pointer-events-none">Reset</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex justify-around items-center">
-                <button data-action="save" aria-label="Save" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
-                    <i class="fas fa-save text-lg sm:text-xl pointer-events-none"></i>
-                    <span class="pointer-events-none">Save</span>
-                </button>
-                <button data-action="load" aria-label="Load" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
-                    <i class="fas fa-upload text-lg sm:text-xl pointer-events-none"></i>
-                    <span class="pointer-events-none">Load</span>
-                </button>
-                <button data-action="open-modal" aria-label="Add Player" class="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent hover:bg-emerald-500 text-white shadow-lg transform transition hover:scale-110 -translate-y-4">
-                  <i class="fas fa-plus text-2xl pointer-events-none"></i>
-                </button>
-                <button data-action="open-more-menu" aria-label="More Options" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-primary hover:bg-indigo-700">
-                    <i class="fas fa-ellipsis-h text-lg sm:text-xl pointer-events-none"></i>
-                    <span class="pointer-events-none">More</span>
-                </button>
-                <button id="reset-button" data-action="reset" aria-label="Reset" class="flex flex-col items-center justify-center space-y-1 p-2 rounded-lg transition-all transform hover:-translate-y-1 text-white text-xs sm:text-sm w-16 h-16 sm:w-20 sm:h-20 bg-warning hover:bg-orange-500">
-                    <i id="reset-icon" class="fas fa-sync-alt text-lg sm:text-xl pointer-events-none"></i>
-                    <span id="reset-label" class="pointer-events-none">Reset</span>
-                </button>
-            </div>
-          </div>
-        </footer>
+            </footer>
 
-        <div id="add-player-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
-          <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
-            <h2 class="text-2xl font-bold mb-4 text-white">Add New Player</h2>
-            <form id="add-player-form">
-              <input
-                id="player-name-input"
-                type="text"
-                placeholder="Enter player's name"
-                class="w-full px-4 py-2 bg-base-100 border-2 border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-white"
-                required
-              />
-              <div class="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  data-action="close-modal"
-                  class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  class="px-4 py-2 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold"
-                >
-                  Add Player
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <div id="more-menu-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
+            <div id="add-player-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
             <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
-              <h2 class="text-2xl font-bold mb-6 text-white text-center">More Options</h2>
-              <div class="flex flex-col gap-4">
-                  <button data-action="trigger-import-image" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
-                      <i class="fas fa-file-image"></i> Import from File
-                  </button>
-                  <button data-action="trigger-camera" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
-                      <i class="fas fa-camera"></i> Take a Photo
-                  </button>
-                  <button data-action="export" class="w-full px-4 py-3 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold flex items-center justify-center gap-3">
-                      <i class="fas fa-file-csv"></i> Export to CSV
-                  </button>
-              </div>
-              <div class="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  data-action="close-more-menu"
-                  class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
-                >
-                  Close
-                </button>
-              </div>
+                <h2 class="text-2xl font-bold mb-4 text-white">Add New Player</h2>
+                <form id="add-player-form">
+                <input
+                    id="player-name-input"
+                    type="text"
+                    placeholder="Enter player's name"
+                    class="w-full px-4 py-2 bg-base-100 border-2 border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-white"
+                    required
+                />
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                    type="button"
+                    data-action="close-modal"
+                    class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
+                    >
+                    Cancel
+                    </button>
+                    <button
+                    type="submit"
+                    class="px-4 py-2 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold"
+                    >
+                    Add Player
+                    </button>
+                </div>
+                </form>
             </div>
-        </div>
+            </div>
 
-        <div id="camera-modal" class="fixed inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center z-[60] p-4 hidden">
-            <video id="camera-feed" class="w-full h-auto max-w-4xl max-h-[70vh] rounded-lg" playsinline autoplay></video>
-            <canvas id="camera-canvas" class="hidden"></canvas>
-            <div id="camera-capture-controls" class="mt-4 flex gap-4">
-                <button data-action="capture-photo" class="w-16 h-16 rounded-full bg-white flex items-center justify-center transform transition hover:scale-110" aria-label="Capture Photo">
-                    <div class="w-14 h-14 rounded-full border-4 border-neutral bg-white"></div>
-                </button>
+            <div id="more-menu-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 transition-opacity hidden">
+                <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
+                <h2 class="text-2xl font-bold mb-6 text-white text-center">More Options</h2>
+                <div class="flex flex-col gap-4">
+                    <button data-action="open-api-key-modal" class="w-full px-4 py-3 rounded-md bg-secondary hover:bg-indigo-500 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                        <i class="fas fa-key"></i> Set API Key
+                    </button>
+                    <button data-action="trigger-import-image" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                        <i class="fas fa-file-image"></i> Import from File
+                    </button>
+                    <button data-action="trigger-camera" class="w-full px-4 py-3 rounded-md bg-primary hover:bg-indigo-700 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                        <i class="fas fa-camera"></i> Take a Photo
+                    </button>
+                    <button data-action="export" class="w-full px-4 py-3 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold flex items-center justify-center gap-3">
+                        <i class="fas fa-file-csv"></i> Export to CSV
+                    </button>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button
+                    type="button"
+                    data-action="close-more-menu"
+                    class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
+                    >
+                    Close
+                    </button>
+                </div>
+                </div>
             </div>
-            <div id="camera-confirm-controls" class="mt-4 flex gap-4 hidden">
-                 <button data-action="retake-photo" class="px-6 py-3 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Retake</button>
-                 <button data-action="use-photo" class="px-6 py-3 rounded-md bg-accent hover:bg-emerald-500 text-white font-semibold">Use Photo</button>
+            
+            <div id="api-key-modal" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-[60] transition-opacity hidden">
+            <div class="bg-neutral rounded-lg shadow-xl p-6 w-full max-w-sm mx-4 transform transition-all scale-95 opacity-0 animate-scale-in" style="animation: scale-in 0.2s forwards;">
+                <h2 class="text-2xl font-bold mb-4 text-white">Set Gemini API Key</h2>
+                <p class="text-gray-400 mb-4 text-sm">An API key is required for image analysis features. Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent underline hover:text-emerald-400">Google AI Studio</a>.</p>
+                <form id="api-key-form">
+                <input
+                    id="api-key-input"
+                    type="password"
+                    placeholder="Enter your API Key"
+                    class="w-full px-4 py-2 bg-base-100 border-2 border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-white"
+                    required
+                />
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                    type="button"
+                    data-action="close-api-key-modal"
+                    class="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors text-white font-semibold"
+                    >
+                    Cancel
+                    </button>
+                    <button
+                    type="submit"
+                    class="px-4 py-2 rounded-md bg-accent hover:bg-emerald-500 transition-colors text-white font-semibold"
+                    >
+                    Save Key
+                    </button>
+                </div>
+                </form>
             </div>
-            <button data-action="close-camera-modal" class="absolute top-4 right-4 text-white text-3xl font-bold w-10 h-10 flex items-center justify-center bg-black bg-opacity-50 rounded-full" aria-label="Close camera">&times;</button>
+            </div>
+
+            <div id="camera-modal" class="fixed inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center z-[60] p-4 hidden">
+                <video id="camera-feed" class="w-full h-auto max-w-4xl max-h-[70vh] rounded-lg" playsinline autoplay></video>
+                <canvas id="camera-canvas" class="hidden"></canvas>
+                <div id="camera-capture-controls" class="mt-4 flex gap-4">
+                    <button data-action="capture-photo" class="w-16 h-16 rounded-full bg-white flex items-center justify-center transform transition hover:scale-110" aria-label="Capture Photo">
+                        <div class="w-14 h-14 rounded-full border-4 border-neutral bg-white"></div>
+                    </button>
+                </div>
+                <div id="camera-confirm-controls" class="mt-4 flex gap-4 hidden">
+                    <button data-action="retake-photo" class="px-6 py-3 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Retake</button>
+                    <button data-action="use-photo" class="px-6 py-3 rounded-md bg-accent hover:bg-emerald-500 text-white font-semibold">Use Photo</button>
+                </div>
+                <button data-action="close-camera-modal" class="absolute top-4 right-4 text-white text-3xl font-bold w-10 h-10 flex items-center justify-center bg-black bg-opacity-50 rounded-full" aria-label="Close camera">&times;</button>
+            </div>
         </div>
+        
+        <input type="file" id="image-upload-input" class="hidden" accept="image/*">
     </div>
-    
-    <input type="file" id="image-upload-input" class="hidden" accept="image/*">
 
     <script type="module">
         import { GoogleGenAI, Type } from "@google/genai";
 
         document.addEventListener('DOMContentLoaded', () => {
             const STORAGE_KEY = 'gameScoreTrackerData';
+            const API_KEY_STORAGE_KEY = 'geminiApiKey';
             let players = [];
             let isResetConfirming = false;
             let resetTimeout = null;
             let currentMode = 'preset'; // 'input', 'preset', or 'auto'
             let cameraStream = null;
             let draggedPlayerId = null;
+            let pendingAction = null; // Store action that needs API key
 
-            // DOM Elements
+            // --- DOM Elements ---
+            // API Key Gate
+            const apiKeyGate = document.getElementById('api-key-gate');
+            const mainAppContainer = document.getElementById('main-app-container');
+            const apiKeyGateForm = document.getElementById('api-key-gate-form');
+            const apiKeyGateInput = document.getElementById('api-key-gate-input');
+            const apiKeyGateError = document.getElementById('api-key-gate-error');
+            const apiKeyGateButtonText = document.getElementById('api-key-gate-button-text');
+            const apiKeyGateSpinner = document.getElementById('api-key-gate-spinner');
+            
+            // Main App
             const playerContainer = document.getElementById('player-container');
             const noPlayersMessage = document.getElementById('no-players-message');
             const modal = document.getElementById('add-player-modal');
@@ -266,6 +330,9 @@
             const cameraCanvas = document.getElementById('camera-canvas');
             const cameraCaptureControls = document.getElementById('camera-capture-controls');
             const cameraConfirmControls = document.getElementById('camera-confirm-controls');
+            const apiKeyModal = document.getElementById('api-key-modal');
+            const apiKeyForm = document.getElementById('api-key-form');
+            const apiKeyInput = document.getElementById('api-key-input');
             
             // Mode-specific DOM elements
             const modeButtons = document.querySelectorAll('.mode-button');
@@ -274,6 +341,8 @@
             const globalScoreStepInput = document.getElementById('global-score-step');
 
             // --- SERVICES ---
+
+            const getApiKey = () => localStorage.getItem(API_KEY_STORAGE_KEY);
 
             const savePlayersToStorage = () => {
                 try {
@@ -330,10 +399,23 @@
 
             // --- UI & RENDERING ---
 
-            const showNotification = (message, type) => {
+            const showNotification = (message, type = 'info') => {
                 const notification = document.createElement('div');
-                const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
-                notification.className = `px-6 py-3 rounded-lg shadow-lg text-white font-semibold transition-all duration-300 mb-2 opacity-0 translate-x-10 ${type === 'success' ? 'bg-accent' : 'bg-error'}`;
+                let iconClass, bgColor;
+                switch(type) {
+                    case 'success':
+                        iconClass = 'fa-check-circle';
+                        bgColor = 'bg-accent';
+                        break;
+                    case 'error':
+                        iconClass = 'fa-exclamation-triangle';
+                        bgColor = 'bg-error';
+                        break;
+                    default:
+                        iconClass = 'fa-info-circle';
+                        bgColor = 'bg-info';
+                }
+                notification.className = `px-6 py-3 rounded-lg shadow-lg text-white font-semibold transition-all duration-300 mb-2 opacity-0 translate-x-10 ${bgColor}`;
                 notification.innerHTML = `<i class="fas ${iconClass} mr-3"></i> ${message}`;
                 
                 notificationContainer.appendChild(notification);
@@ -377,28 +459,28 @@
                     : `<span class="text-xs text-gray-500 score-history-display"></span>`;
 
                 return `
-                    <div draggable="true" class="bg-neutral rounded-lg shadow-lg flex items-center p-3 gap-3" data-player-id="${player.id}">
+                    <div draggable="true" class="bg-neutral rounded-lg shadow-lg flex items-center p-2 sm:p-3 gap-2 sm:gap-3" data-player-id="${player.id}">
                         <!-- Delete button moved to the left -->
                         <div class="flex-shrink-0">
-                            <button data-action="delete" data-id="${player.id}" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-error transition-colors" aria-label="Delete ${player.name}">
-                                <i class="fas fa-trash-alt text-lg pointer-events-none"></i>
+                            <button data-action="delete" data-id="${player.id}" class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-gray-400 hover:text-error transition-colors" aria-label="Delete ${player.name}">
+                                <i class="fas fa-trash-alt text-md sm:text-lg pointer-events-none"></i>
                             </button>
                         </div>
 
                         <div class="relative flex-shrink-0">
-                            <img src="${player.avatarUrl}" alt="${player.name}'s avatar" class="w-12 h-12 rounded-full border-2 border-accent" />
+                            <img src="${player.avatarUrl}" alt="${player.name}'s avatar" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-accent" />
                             ${rank ? crowns[rank] : ''}
                         </div>
                         <div class="flex-grow overflow-hidden">
-                            <h2 class="text-lg font-bold text-white truncate">${player.name}</h2>
+                            <h2 class="text-md sm:text-lg font-bold text-white truncate">${player.name}</h2>
                             ${previousScoreHTML}
                         </div>
                         
                         <!-- Grouped score controls -->
-                        <div class="flex items-center gap-3 flex-shrink-0">
-                            <button data-action="update-score" data-id="${player.id}" data-sign="-1" class="w-10 h-10 flex items-center justify-center text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-red-600 hover:bg-red-500 text-white">-</button>
-                            <p class="text-3xl font-extrabold text-white tracking-tighter w-20 text-center score-display rounded-md">${player.score}</p>
-                            <button data-action="update-score" data-id="${player.id}" data-sign="1" class="w-10 h-10 flex items-center justify-center text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-green-600 hover:bg-green-500 text-white">+</button>
+                        <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                            <button data-action="update-score" data-id="${player.id}" data-sign="-1" class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-lg sm:text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-red-600 hover:bg-red-500 text-white">-</button>
+                            <p class="text-2xl sm:text-3xl font-extrabold text-white tracking-tighter w-16 sm:w-20 text-center score-display rounded-md">${player.score}</p>
+                            <button data-action="update-score" data-id="${player.id}" data-sign="1" class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-lg sm:text-xl font-bold rounded-md transition-transform transform hover:scale-110 bg-green-600 hover:bg-green-500 text-white">+</button>
                         </div>
                     </div>
                 `;
@@ -456,6 +538,19 @@
                         button.classList.add('bg-primary');
                     }
                 });
+            };
+
+            const openApiKeyModal = (callback) => {
+                pendingAction = callback;
+                apiKeyInput.value = getApiKey() || '';
+                apiKeyModal.classList.remove('hidden');
+                apiKeyInput.focus();
+            };
+
+            const closeApiKeyModal = () => {
+                apiKeyModal.classList.add('hidden');
+                apiKeyForm.reset();
+                pendingAction = null;
             };
 
             // --- EVENT HANDLERS ---
@@ -613,6 +708,11 @@
             };
             
             const processImageForScores = async (imageSource) => {
+                const apiKey = getApiKey();
+                if (!apiKey) {
+                    showNotification('API Key is required. Please set it in the "More" menu.', 'error');
+                    return;
+                }
                 if (!imageSource) return;
 
                 loadingOverlay.classList.remove('hidden');
@@ -620,8 +720,8 @@
 
                 try {
                     const base64Data = await fileToBase64(imageSource);
-                    const mimeType = imageSource.type;
-                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const mimeType = imageSource.type || 'image/jpeg';
+                    const ai = new GoogleGenAI({ apiKey });
                     
                     const imagePart = { inlineData: { mimeType, data: base64Data } };
                     const textPart = { text: "Analyze this image of a game scoreboard. Extract each player's name and their corresponding score. Return the data as a JSON array of objects, where each object has a 'name' (string) and a 'score' (number). If you cannot find players or scores, return an empty array." };
@@ -669,7 +769,7 @@
 
                 } catch (error) {
                     console.error('Error importing from image:', error);
-                    showNotification('Failed to analyze image. Please try again.', 'error');
+                    showNotification('Failed to analyze image. Check API key or image quality.', 'error');
                 } finally {
                     loadingOverlay.classList.add('hidden');
                     loadingOverlay.classList.remove('flex');
@@ -724,8 +824,61 @@
                 stopCamera();
             };
 
+            // --- API KEY VERIFICATION & APP INITIALIZATION ---
 
-            // --- INITIALIZATION & EVENT LISTENERS ---
+            const verifyApiKey = async (key) => {
+                if (!key) return false;
+                try {
+                    const ai = new GoogleGenAI({ apiKey: key });
+                    await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: 'test' });
+                    return true;
+                } catch (error) {
+                    console.error('API Key validation failed:', error);
+                    return false;
+                }
+            };
+
+            const showGateLoading = (isVerifying) => {
+                apiKeyGateSpinner.classList.toggle('hidden', !isVerifying);
+                apiKeyGateButtonText.textContent = isVerifying ? 'Verifying...' : 'Verify & Continue';
+                apiKeyGateForm.querySelector('button').disabled = isVerifying;
+                apiKeyGateInput.disabled = isVerifying;
+                apiKeyGateError.textContent = '';
+            };
+
+            const showGateError = (message) => {
+                apiKeyGateError.textContent = message;
+            };
+
+            const initializeApp = () => {
+                apiKeyGate.style.opacity = '0';
+                apiKeyGate.addEventListener('transitionend', () => apiKeyGate.classList.add('hidden'), { once: true });
+                mainAppContainer.classList.remove('hidden');
+
+                setMode('preset');
+                players = loadPlayersFromStorage();
+                if (players.length > 0) {
+                    showNotification('Game loaded from last session!', 'success');
+                }
+                renderPlayers();
+            };
+
+            const startup = async () => {
+                const existingKey = getApiKey();
+                if (existingKey) {
+                    showGateLoading(true);
+                    const isValid = await verifyApiKey(existingKey);
+                    showGateLoading(false);
+                    if (isValid) {
+                        initializeApp();
+                    } else {
+                        localStorage.removeItem(API_KEY_STORAGE_KEY);
+                        showGateError('Your saved API key is invalid. Please enter a new one.');
+                    }
+                }
+            };
+
+            // --- EVENT LISTENERS ---
 
             document.body.addEventListener('click', (e) => {
                 const targetButton = e.target.closest('button');
@@ -760,12 +913,16 @@
                         moreMenuModal.classList.add('hidden');
                         break;
                     case 'trigger-import-image':
-                        imageUploadInput.click();
                         moreMenuModal.classList.add('hidden');
+                        if (getApiKey()) {
+                           imageUploadInput.click();
+                        }
                         break;
                     case 'trigger-camera':
-                        startCamera();
                         moreMenuModal.classList.add('hidden');
+                         if (getApiKey()) {
+                           startCamera();
+                        }
                         break;
                     case 'close-camera-modal':
                         stopCamera();
@@ -797,28 +954,84 @@
                     case 'close-more-menu':
                         moreMenuModal.classList.add('hidden');
                         break;
+                    case 'open-api-key-modal':
+                        moreMenuModal.classList.add('hidden');
+                        openApiKeyModal();
+                        break;
+                    case 'close-api-key-modal':
+                        closeApiKeyModal();
+                        break;
                 }
             });
             
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.add('hidden');
-                }
+                if (e.target === modal) modal.classList.add('hidden');
             });
              moreMenuModal.addEventListener('click', (e) => {
-                if (e.target === moreMenuModal) {
-                    moreMenuModal.classList.add('hidden');
-                }
+                if (e.target === moreMenuModal) moreMenuModal.classList.add('hidden');
+            });
+            apiKeyModal.addEventListener('click', (e) => {
+                if (e.target === apiKeyModal) closeApiKeyModal();
             });
             
             addPlayerForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 handleAddPlayer(playerNameInput.value);
             });
+            
+            apiKeyGateForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const key = apiKeyGateInput.value.trim();
+                if (!key) {
+                    showGateError('API Key cannot be empty.');
+                    return;
+                }
+
+                showGateLoading(true);
+                const isValid = await verifyApiKey(key);
+                showGateLoading(false);
+
+                if (isValid) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, key);
+                    initializeApp();
+                } else {
+                    showGateError('The provided API Key is invalid. Please try again.');
+                }
+            });
+
+            apiKeyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const key = apiKeyInput.value.trim();
+                if (!key) {
+                    showNotification('Please enter a valid API Key.', 'error');
+                    return;
+                }
+
+                const submitButton = apiKeyForm.querySelector('button[type="submit"]');
+                const originalText = submitButton.textContent;
+                submitButton.textContent = 'Verifying...';
+                submitButton.disabled = true;
+
+                const isValid = await verifyApiKey(key);
+
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+
+                if (isValid) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, key);
+                    showNotification('API Key verified and saved!', 'success');
+                    closeApiKeyModal();
+                    if (typeof pendingAction === 'function') {
+                        pendingAction();
+                        pendingAction = null;
+                    }
+                } else {
+                    showNotification('The provided API Key is invalid.', 'error');
+                }
+            });
 
             imageUploadInput.addEventListener('change', handleFileInputChange);
             
-            // Drag and Drop Listeners for Merging
             playerContainer.addEventListener('dragstart', (e) => {
                 const playerRow = e.target.closest('[data-player-id]');
                 if (!playerRow) return;
@@ -863,12 +1076,7 @@
             });
 
             // Initial Load
-            setMode('preset'); // Set default mode on load
-            players = loadPlayersFromStorage();
-            if (players.length > 0) {
-                showNotification('Game loaded from last session!', 'success');
-            }
-            renderPlayers();
+            startup();
         });
     </script>
 </body>
